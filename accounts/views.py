@@ -12,6 +12,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .serializers import RegisterSerializer, UserSerializer
+from .throttling import LoginRateThrottle
 
 
 # =============================================================================
@@ -32,7 +33,7 @@ def generic_auth_error():
     """
     Return the same error for all authentication failures.
 
-    This prevents attackers from determining whether an email
+    Prevents attackers from determining whether an email
     exists in the database.
     """
     return Response(
@@ -64,6 +65,7 @@ class LoginView(APIView):
     """
 
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         email = request.data.get("email", "")
@@ -84,7 +86,7 @@ class LoginView(APIView):
         # ---------------------------------------------------------------------
 
         if user.is_locked():
-            # Return the same response as other authentication failures.
+            # Same response as other authentication failures.
             return generic_auth_error()
 
         # ---------------------------------------------------------------------
@@ -123,10 +125,17 @@ class LoginView(APIView):
         # Generate JWT tokens.
         refresh = RefreshToken.for_user(user)
 
+        access_token = str(refresh.access_token)
+        refresh_token = str(refresh)
+
         return Response(
             {
-                "access": str(refresh.access_token),
-                "refresh": str(refresh),
+                "access": access_token,
+                "refresh": refresh_token,
+
+                # Alias used by the provided index.html.
+                "token": access_token,
+
                 "user": UserSerializer(user).data,
             },
             status=status.HTTP_200_OK,
@@ -145,8 +154,9 @@ class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+
         # ---------------------------------------------------------------------
-        # Blocklist the current access token in Redis
+        # Blocklist current access token in Redis
         # ---------------------------------------------------------------------
 
         access_token = request.auth
@@ -163,7 +173,7 @@ class LogoutView(APIView):
             )
 
         # ---------------------------------------------------------------------
-        # Blacklist the refresh token
+        # Blacklist refresh token
         # ---------------------------------------------------------------------
 
         refresh_str = request.data.get("refresh")
@@ -171,12 +181,15 @@ class LogoutView(APIView):
         if refresh_str:
             try:
                 RefreshToken(refresh_str).blacklist()
+
             except TokenError:
                 # Already invalid or blacklisted.
-                # Logout should remain idempotent.
+                # Logout remains idempotent.
                 pass
 
-        return Response(status=status.HTTP_205_RESET_CONTENT)
+        return Response(
+            status=status.HTTP_205_RESET_CONTENT
+        )
 
 
 # =============================================================================
@@ -191,8 +204,9 @@ class MeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+
         # request.user comes from the validated JWT.
-        # No user ID/email is accepted from the client.
+        # No user ID or email is accepted from the client.
         return Response(
             UserSerializer(request.user).data,
             status=status.HTTP_200_OK,

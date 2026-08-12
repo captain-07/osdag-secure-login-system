@@ -6,3 +6,4 @@ django-redis
 python-dotenv
 django-ratelimit
 pytest-django
+django-cors-headers
