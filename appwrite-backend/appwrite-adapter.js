@@ -26,7 +26,10 @@
     return {
       client,
       account: new Appwrite.Account(client),
-      databases: new Appwrite.Databases(client),
+      // NOTE: this database is TablesDB type, so we use the modern
+      // `TablesDB` service (tables/rows). The legacy `Databases`
+      // (collections/documents) API is deprecated and does not work here.
+      tablesDB: new Appwrite.TablesDB(client),
       storage: new Appwrite.Storage(client),
     };
   }
@@ -100,18 +103,20 @@
 
   async function handleFiles() {
     const cfg = config();
-    const { account, databases } = client();
+    const { account, tablesDB } = client();
     try {
       const me = await account.get();
-      // Query filter is a defense-in-depth extra — document permissions
-      // already prevent other users' rows from being returned even
-      // without this filter, but it keeps the query itself honest.
-      const res = await databases.listDocuments(cfg.databaseId, cfg.filesCollectionId, [
-        Appwrite.Query.equal("ownerId", me.$id),
-      ]);
-      const files = res.documents.map((d) => ({
-        id: d.$id, ownerId: d.ownerId, fileName: d.filename,
-        mimeType: d.mimeType, sizeBytes: d.sizeBytes,
+      // Query filter is a defense-in-depth extra — row permissions already
+      // prevent other users' rows from being returned even without this
+      // filter, but it keeps the query itself honest.
+      const res = await tablesDB.listRows({
+        databaseId: cfg.databaseId,
+        tableId: cfg.filesCollectionId,
+        queries: [Appwrite.Query.equal("ownerId", me.$id)],
+      });
+      const files = res.rows.map((r) => ({
+        id: r.$id, ownerId: r.ownerId, fileName: r.filename,
+        mimeType: r.mimeType, sizeBytes: r.sizeBytes,
       }));
       return json(200, { files });
     } catch (err) {
@@ -121,14 +126,18 @@
 
   async function handleFileById(fileId) {
     const cfg = config();
-    const { databases } = client();
+    const { tablesDB } = client();
     try {
       // No manual ownership check here — Appwrite enforces it via the
-      // document's read permission (set at creation, see seed script).
+      // row's read permission (set at creation, see seed script).
       // If this call succeeds at all, Appwrite already confirmed access.
-      const d = await databases.getDocument(cfg.databaseId, cfg.filesCollectionId, fileId);
+      const r = await tablesDB.getRow({
+        databaseId: cfg.databaseId,
+        tableId: cfg.filesCollectionId,
+        rowId: fileId,
+      });
       return json(200, {
-        file: { id: d.$id, ownerId: d.ownerId, fileName: d.filename, mimeType: d.mimeType, sizeBytes: d.sizeBytes },
+        file: { id: r.$id, ownerId: r.ownerId, fileName: r.filename, mimeType: r.mimeType, sizeBytes: r.sizeBytes },
       });
     } catch (err) {
       // NOTE for your README: Appwrite returns 401 for "exists but not
@@ -142,15 +151,21 @@
 
   async function handleFileDownload(fileId) {
     const cfg = config();
-    const { databases, storage } = client();
+    const { tablesDB, storage } = client();
     try {
-      const d = await databases.getDocument(cfg.databaseId, cfg.filesCollectionId, fileId);
+      const r = await tablesDB.getRow({
+        databaseId: cfg.databaseId,
+        tableId: cfg.filesCollectionId,
+        rowId: fileId,
+      });
       // getFileDownload returns a URL (with the session's auth baked into
       // the request context) — we fetch it ourselves and re-wrap as a
       // Response so index.html's existing blob-download code works
       // unmodified.
-      const url = storage.getFileDownload(cfg.bucketId, d.storageFileId);
-      const fileRes = await fetch(url, { credentials: "include" });
+      const url = storage.getFileDownload(cfg.bucketId, r.storageFileId);
+      // Must use realFetch, not the patched window.fetch — otherwise this
+      // call re-enters the adapter and never reaches Appwrite.
+      const fileRes = await realFetch(url, { credentials: "include" });
       return fileRes;
     } catch (err) {
       return errorResponse(err);
@@ -166,6 +181,10 @@
     const { pathname } = new URL(url, window.location.href);
     const req = new Request(url, init);
 
+    // NOTE: the Appwrite Web SDK's own HTTP calls also go through
+    // window.fetch (URLs like https://sgp.cloud.appwrite.io/v1/account).
+    // Those must never be routed here — only the app's own mock routes are
+    // handled below, everything else falls through to the real fetch.
     if (pathname === "/register" && req.method === "POST") return handleRegister(req);
     if (pathname === "/login" && req.method === "POST") return handleLogin(req);
     if (pathname === "/logout" && req.method === "POST") return handleLogout(req);
@@ -178,7 +197,9 @@
     m = pathname.match(/^\/files\/([^/]+)$/);
     if (m && req.method === "GET") return handleFileById(m[1]);
 
-    return json(404, { error: "No Appwrite adapter route for " + req.method + " " + pathname });
+    // Not one of the app's routes — let the request through untouched
+    // (covers the Appwrite SDK's internal API calls AND the download URL).
+    return realFetch(input, init);
   };
 
   console.info("[appwrite-adapter] ready — select the 'Appwrite' radio in index.html to use it");

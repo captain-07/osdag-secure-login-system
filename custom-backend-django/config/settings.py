@@ -245,6 +245,9 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = ["rest_framework.throttling.AnonRateThrottle"]
-REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {"login": "5/min"}
+REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+    "login": "5/min",
+    "anon": "60/min",
+}
 
 APPEND_SLASH = False
