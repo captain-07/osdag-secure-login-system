@@ -43,8 +43,8 @@ def other_user_file(db, user):
 def test_list_files_returns_only_own(auth_client, owned_file, other_user_file):
     resp = auth_client.get(LIST_URL)
     assert resp.status_code == status.HTTP_200_OK
-    assert len(resp.data) == 1
-    assert resp.data[0]["filename"] == "resume.pdf"
+    assert len(resp.data["files"]) == 1
+    assert resp.data["files"][0]["filename"] == "resume.pdf"
 
 
 def test_file_detail_returns_own(auth_client, owned_file):

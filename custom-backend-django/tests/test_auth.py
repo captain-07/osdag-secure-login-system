@@ -1,9 +1,12 @@
 """Registration, login, lockout, and /me tests."""
 
+from datetime import timedelta
+
 import pytest
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 
 pytestmark = pytest.mark.django_db
@@ -96,3 +99,37 @@ def test_account_locks_after_five_failed_attempts(api_client, user):
         format="json",
     )
     assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_lockout_budget_resets_after_window_expires(api_client, user):
+    # Simulate a previously locked account whose lockout has already elapsed.
+    user.failed_login_attempts = 5
+    user.locked_until = timezone.now() - timedelta(seconds=1)
+    user.save(update_fields=["failed_login_attempts", "locked_until"])
+
+    resp = api_client.post(
+        LOGIN_URL,
+        {"email": "alice@example.com", "password": "wrong-pass"},
+        format="json",
+    )
+    assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+
+    # One failed attempt after the window should NOT immediately re-lock the
+    # account from the stale count — the budget starts fresh.
+    user.refresh_from_db()
+    assert user.failed_login_attempts == 1
+    assert user.locked_until is None
+    assert not user.is_locked()
+
+
+def test_inactive_user_cannot_login(api_client, user):
+    user.is_active = False
+    user.save(update_fields=["is_active"])
+
+    resp = api_client.post(
+        LOGIN_URL,
+        {"email": "alice@example.com", "password": "Password123!"},
+        format="json",
+    )
+    assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+    assert resp.data["detail"] == "Invalid email or password."

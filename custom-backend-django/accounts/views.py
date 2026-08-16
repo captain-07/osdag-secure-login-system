@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import transaction
 from django.utils import timezone
 
 from rest_framework import generics, permissions, status
@@ -12,7 +13,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .serializers import RegisterSerializer, UserSerializer
-from .throttling import LoginRateThrottle
+from .throttling import LoginRateThrottle, RegisterRateThrottle
 
 
 # =============================================================================
@@ -53,6 +54,7 @@ class RegisterView(generics.CreateAPIView):
 
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [RegisterRateThrottle]
 
 
 # =============================================================================
@@ -71,33 +73,66 @@ class LoginView(APIView):
         email = request.data.get("email", "")
         password = request.data.get("password", "")
 
-        # ---------------------------------------------------------------------
-        # Find user
-        # ---------------------------------------------------------------------
+        # The read-modify-write on failed_login_attempts below must be atomic:
+        # two concurrent wrong-password requests could otherwise both read the
+        # same counter and neither would trip the lockout threshold. Locking
+        # the row for the duration of the transaction serializes them.
+        with transaction.atomic():
+            try:
+                user = User.objects.select_for_update().get(email=email)
+            except User.DoesNotExist:
+                # Do not reveal whether the email exists.
+                return generic_auth_error()
 
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            # Do not reveal whether the email exists.
-            return generic_auth_error()
+            # -----------------------------------------------------------------
+            # Check account lockout
+            # -----------------------------------------------------------------
 
-        # ---------------------------------------------------------------------
-        # Check account lockout
-        # ---------------------------------------------------------------------
+            if user.is_locked():
+                # Same response as other authentication failures.
+                return generic_auth_error()
 
-        if user.is_locked():
-            # Same response as other authentication failures.
-            return generic_auth_error()
+            # -----------------------------------------------------------------
+            # Check account is active
+            # -----------------------------------------------------------------
 
-        # ---------------------------------------------------------------------
-        # Validate password
-        # ---------------------------------------------------------------------
+            if not user.is_active:
+                # Same generic response — do not reveal the account state.
+                return generic_auth_error()
 
-        if not user.check_password(password):
-            user.failed_login_attempts += 1
+            # -----------------------------------------------------------------
+            # Validate password
+            # -----------------------------------------------------------------
 
-            if user.failed_login_attempts >= MAX_FAILED_ATTEMPTS:
-                user.locked_until = timezone.now() + LOCKOUT_DURATION
+            if not user.check_password(password):
+                # If a previous lockout has already expired, reset the attempt
+                # budget first. Otherwise the stale count (which stays >= the
+                # threshold while locked) would re-lock the account on a single
+                # wrong guess the moment the window passes.
+                if user.locked_until and user.locked_until <= timezone.now():
+                    user.failed_login_attempts = 0
+                    user.locked_until = None
+
+                user.failed_login_attempts += 1
+
+                if user.failed_login_attempts >= MAX_FAILED_ATTEMPTS:
+                    user.locked_until = timezone.now() + LOCKOUT_DURATION
+
+                user.save(
+                    update_fields=[
+                        "failed_login_attempts",
+                        "locked_until",
+                    ]
+                )
+
+                return generic_auth_error()
+
+            # -----------------------------------------------------------------
+            # Successful login
+            # -----------------------------------------------------------------
+
+            user.failed_login_attempts = 0
+            user.locked_until = None
 
             user.save(
                 update_fields=[
@@ -105,22 +140,6 @@ class LoginView(APIView):
                     "locked_until",
                 ]
             )
-
-            return generic_auth_error()
-
-        # ---------------------------------------------------------------------
-        # Successful login
-        # ---------------------------------------------------------------------
-
-        user.failed_login_attempts = 0
-        user.locked_until = None
-
-        user.save(
-            update_fields=[
-                "failed_login_attempts",
-                "locked_until",
-            ]
-        )
 
         # Generate JWT tokens.
         refresh = RefreshToken.for_user(user)

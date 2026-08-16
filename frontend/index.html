@@ -69,6 +69,7 @@
 <fieldset>
   <legend>Session token (only needed if backend is JWT/bearer, not cookies)</legend>
   <label>Token <input id="token" size="60"></label>
+  <label>Refresh token <input id="refreshToken" size="60"></label>
 </fieldset>
 
 <fieldset>
@@ -84,10 +85,10 @@
 <pre id="output">(responses will show up here)</pre>
 
 <script src="mock-api.js"></script>
-<!-- Appwrite Web SDK & adapter (Uncomment or include these when implementing the Appwrite backend mode) -->
+<!-- Appwrite Web SDK & adapter -->
 
 <script src="https://cdn.jsdelivr.net/npm/appwrite@20.0.0/dist/iife/sdk.js"></script>
-<script src="appwrite-backend/appwrite-adapter.js"></script>
+<script src="appwrite-adapter.js"></script>
 
 <script>
 function base() { return document.getElementById('baseUrl').value.replace(/\/$/, ''); }
@@ -137,16 +138,27 @@ async function doLogin() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
   });
-  // If the backend returns a JWT in the body, auto-fill the token field
+  // If the backend returns JWTs in the body, auto-fill the token fields.
+  // The refresh token is kept so logout can revoke it server-side.
   if (result.body && result.body.token) {
     document.getElementById('token').value = result.body.token;
+  }
+  if (result.body && result.body.refresh) {
+    document.getElementById('refreshToken').value = result.body.refresh;
   }
   log('POST /login', result);
 }
 
 async function doLogout() {
-  const result = await request('/logout', { method: 'POST' });
+  // Send the refresh token so the backend can blacklist it, not just the
+  // access token (which would otherwise leave a live refresh token behind).
+  const result = await request('/logout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh: document.getElementById('refreshToken').value })
+  });
   document.getElementById('token').value = '';
+  document.getElementById('refreshToken').value = '';
   log('POST /logout', result);
 }
 

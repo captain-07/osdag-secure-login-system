@@ -1,4 +1,4 @@
-from rest_framework import generics, permissions, status
+from rest_framework import permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.http import FileResponse
@@ -6,14 +6,16 @@ from .models import File
 from .serializers import FileSerializer
 
 
-class FileListView(generics.ListAPIView):
-    serializer_class = FileSerializer
+class FileListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
+    def get(self, request):
         # Filtering at the queryset level (not "get all, then filter in
         # Python") means the DB itself never returns another user's rows.
-        return File.objects.filter(owner=self.request.user)
+        # Wrapped in {"files": [...]} to match the mock and Appwrite
+        # backends, which the provided client expects.
+        queryset = File.objects.filter(owner=request.user)
+        return Response({"files": FileSerializer(queryset, many=True).data})
 
 
 def _get_owned_or_error(pk, user):

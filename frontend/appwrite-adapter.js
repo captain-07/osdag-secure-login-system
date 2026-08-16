@@ -114,9 +114,12 @@
         tableId: cfg.filesCollectionId,
         queries: [Appwrite.Query.equal("ownerId", me.$id)],
       });
+      // Row columns are nested under `r.data` (the `$id`/`$createdAt`/
+      // `$permissions` fields live at the top level). Reading them off the
+      // row object directly would yield `undefined`.
       const files = res.rows.map((r) => ({
-        id: r.$id, ownerId: r.ownerId, fileName: r.filename,
-        mimeType: r.mimeType, sizeBytes: r.sizeBytes,
+        id: r.$id, ownerId: r.data.ownerId, fileName: r.data.filename,
+        mimeType: r.data.mimeType, sizeBytes: r.data.sizeBytes,
       }));
       return json(200, { files });
     } catch (err) {
@@ -137,7 +140,7 @@
         rowId: fileId,
       });
       return json(200, {
-        file: { id: r.$id, ownerId: r.ownerId, fileName: r.filename, mimeType: r.mimeType, sizeBytes: r.sizeBytes },
+        file: { id: r.$id, ownerId: r.data.ownerId, fileName: r.data.filename, mimeType: r.data.mimeType, sizeBytes: r.data.sizeBytes },
       });
     } catch (err) {
       // NOTE for your README: Appwrite returns 401 for "exists but not
@@ -151,21 +154,29 @@
 
   async function handleFileDownload(fileId) {
     const cfg = config();
-    const { tablesDB, storage } = client();
+    const { account, tablesDB, storage } = client();
     try {
       const r = await tablesDB.getRow({
         databaseId: cfg.databaseId,
         tableId: cfg.filesCollectionId,
         rowId: fileId,
       });
-      // getFileDownload returns a URL (with the session's auth baked into
-      // the request context) — we fetch it ourselves and re-wrap as a
-      // Response so index.html's existing blob-download code works
-      // unmodified.
-      const url = storage.getFileDownload(cfg.bucketId, r.storageFileId);
+      // getFileDownload only returns a URL (no auth baked into it), so a
+      // bare cross-origin fetch would 401 — the Web SDK authenticates API
+      // calls via the X-Fallback-Cookies header from localStorage, which a
+      // raw fetch doesn't send. A short-lived JWT is the supported way to
+      // authorize a storage download across origins.
+      const url = storage.getFileDownload(cfg.bucketId, r.data.storageFileId);
+      const headers = {};
+      try {
+        const jwt = await account.createJWT();
+        headers["x-appwrite-jwt"] = jwt.jwt;
+      } catch (e) {
+        // Not authenticated — the fetch below will 401, which we return as-is.
+      }
       // Must use realFetch, not the patched window.fetch — otherwise this
       // call re-enters the adapter and never reaches Appwrite.
-      const fileRes = await realFetch(url, { credentials: "include" });
+      const fileRes = await realFetch(url, { credentials: "include", headers });
       return fileRes;
     } catch (err) {
       return errorResponse(err);

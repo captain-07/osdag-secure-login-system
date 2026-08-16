@@ -52,6 +52,7 @@ def pytest_configure(config):
     # fighting the rate limiter. The throttle test overrides this itself.
     settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
         "login": "100/min",
+        "register": "100/min",
         "anon": "100/min",
     }
 

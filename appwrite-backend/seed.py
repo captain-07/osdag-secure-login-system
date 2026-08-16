@@ -12,6 +12,7 @@ from appwrite.services.storage import Storage
 from appwrite.id import ID
 from appwrite.input_file import InputFile
 from appwrite.permission import Permission
+from appwrite.query import Query
 from appwrite.role import Role
 
 ENDPOINT = os.environ["APPWRITE_ENDPOINT"]
@@ -26,6 +27,38 @@ users = Users(client)
 tablesdb = TablesDB(client)
 storage = Storage(client)
 
+# Appwrite list endpoints are paginated (default page size 25). Loop over every
+# page so re-runs of this script with more than 25 existing users/rows still
+# detect them instead of hitting unique-constraint errors / duplicate uploads.
+PAGE_SIZE = 25
+
+
+def _all_users():
+    # The SDK types `.total` as float (3.0), but range() needs ints.
+    total = int(users.list(queries=[Query.limit(PAGE_SIZE)], total=True).total)
+    for offset in range(0, total, PAGE_SIZE):
+        page = users.list(
+            queries=[Query.limit(PAGE_SIZE), Query.offset(offset)]
+        )
+        yield from page.users
+
+
+def _all_rows():
+    total = int(
+        tablesdb.list_rows(
+            database_id=DATABASE_ID,
+            table_id=FILES_COLLECTION_ID,
+            total=True,
+        ).total
+    )
+    for offset in range(0, total, PAGE_SIZE):
+        page = tablesdb.list_rows(
+            database_id=DATABASE_ID,
+            table_id=FILES_COLLECTION_ID,
+            queries=[Query.limit(PAGE_SIZE), Query.offset(offset)],
+        )
+        yield from page.rows
+
 SEED_USERS = [
     {"email": "alice@example.com", "password": "Password123!", "name": "Alice Nakamura",
      "files": ["resume_alice.pdf", "profile_photo.jpg"]},
@@ -35,10 +68,9 @@ SEED_USERS = [
      "files": ["test_plan.docx", "vacation.png"]},
 ]
 
-existing = {u.email: u.id for u in users.list().users}
+existing = {u.email: u.id for u in _all_users()}
 existing_rows = set()
-rows = tablesdb.list_rows(database_id=DATABASE_ID, table_id=FILES_COLLECTION_ID, total=True)
-for r in rows.rows:
+for r in _all_rows():
     existing_rows.add((r.data["ownerId"], r.data["filename"]))
 
 for u in SEED_USERS:

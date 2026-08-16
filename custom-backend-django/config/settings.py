@@ -6,6 +6,8 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 from dotenv import load_dotenv
 
 
@@ -24,12 +26,21 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # SECURITY
 # =============================================================================
 
-SECRET_KEY = os.environ.get(
-    "SECRET_KEY",
-    "django-insecure-development-only-key",
-)
-
 DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
+
+# SECRET_KEY must be set explicitly whenever DEBUG is off. Falling back to a
+# well-known default in production would let anyone forge signed JWTs.
+_raw_secret_key = os.environ.get("SECRET_KEY")
+if _raw_secret_key:
+    SECRET_KEY = _raw_secret_key
+elif DEBUG:
+    # Development-only fallback. 50 chars (>= the 32-byte minimum that PyJWT
+    # warns about for HMAC-SHA256) — never use in production.
+    SECRET_KEY = "django-insecure-dev-only-9f8a2b7c4d6e0f3a8b1c5d9e7f2a4b6c8d0e1f3a5b7c9d1e3f5a7b9c0d2e4f6a8"
+else:
+    raise ImproperlyConfigured(
+        "SECRET_KEY environment variable is required when DEBUG is False."
+    )
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -218,9 +229,19 @@ CACHES = {
 # CORS
 # =============================================================================
 
-# Development only.
-# Replace with specific origins before production.
+# In development (DEBUG=True) every origin is allowed for convenience.
+# With DEBUG off, only the explicit allow-list below is honored — so the
+# browser client on :5500 keeps working even when DEBUG is disabled.
 CORS_ALLOW_ALL_ORIGINS = DEBUG
+
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:5500,http://127.0.0.1:5500",
+    ).split(",")
+    if origin.strip()
+]
 
 
 # =============================================================================
@@ -247,6 +268,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = ["rest_framework.throttling.AnonRateThrottle"]
 REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     "login": "5/min",
+    "register": "10/min",
     "anon": "60/min",
 }
 
