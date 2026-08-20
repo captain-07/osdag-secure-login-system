@@ -30,7 +30,7 @@ Both implementations expose the same functional surface (register, login, logout
 ## Repository Structure
 
 ```
-login-system/
+secure-login-system/
 ├── custom-backend-django/     # Implementation 1 — Django + DRF + PostgreSQL
 │   ├── config/                 # project settings, URL root
 │   ├── accounts/                # auth, user model, seed command
@@ -55,7 +55,7 @@ login-system/
 ## Quick Start
 
 ```bash
-git clone https://github.com/captain-07/osdag-secure-login-system.git
+git clone https://github.com/captain-07/secure-login-system.git
 cd osdag-secure-login-system
 
 # Django backend
