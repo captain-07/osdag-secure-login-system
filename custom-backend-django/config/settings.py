@@ -11,10 +11,6 @@ from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 
-# =============================================================================
-# BASE CONFIGURATION
-# =============================================================================
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
@@ -22,20 +18,12 @@ load_dotenv(BASE_DIR / ".env")
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
-# =============================================================================
-# SECURITY
-# =============================================================================
-
 DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
 
-# SECRET_KEY must be set explicitly whenever DEBUG is off. Falling back to a
-# well-known default in production would let anyone forge signed JWTs.
 _raw_secret_key = os.environ.get("SECRET_KEY")
 if _raw_secret_key:
     SECRET_KEY = _raw_secret_key
 elif DEBUG:
-    # Development-only fallback. 50 chars (>= the 32-byte minimum that PyJWT
-    # warns about for HMAC-SHA256) — never use in production.
     SECRET_KEY = "django-insecure-dev-only-9f8a2b7c4d6e0f3a8b1c5d9e7f2a4b6c8d0e1f3a5b7c9d1e3f5a7b9c0d2e4f6a8"
 else:
     raise ImproperlyConfigured(
@@ -49,46 +37,26 @@ ALLOWED_HOSTS = [
 ]
 
 
-# =============================================================================
-# APPLICATIONS
-# =============================================================================
-
 INSTALLED_APPS = [
-    # Django
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-
-    # Third-party
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "django_redis",
     "corsheaders",
-
-    # Local
     "accounts",
     "files",
 ]
 
-
-# =============================================================================
-# CUSTOM USER MODEL
-# =============================================================================
-
 AUTH_USER_MODEL = "accounts.User"
-
-
-# =============================================================================
-# MIDDLEWARE
-# =============================================================================
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
-
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -98,19 +66,10 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-
-# =============================================================================
-# URL / APPLICATION CONFIGURATION
-# =============================================================================
-
 ROOT_URLCONF = "config.urls"
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-
-# =============================================================================
-# TEMPLATES
-# =============================================================================
 
 TEMPLATES = [
     {
@@ -128,10 +87,6 @@ TEMPLATES = [
 ]
 
 
-# =============================================================================
-# DATABASE
-# =============================================================================
-
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -143,10 +98,6 @@ DATABASES = {
     }
 }
 
-
-# =============================================================================
-# PASSWORD VALIDATION
-# =============================================================================
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -176,10 +127,6 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# =============================================================================
-# DJANGO REST FRAMEWORK
-# =============================================================================
-
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "accounts.authentication.BlocklistAwareJWTAuthentication",
@@ -190,26 +137,12 @@ REST_FRAMEWORK = {
 }
 
 
-# =============================================================================
-# JWT
-# =============================================================================
-
 SIMPLE_JWT = {
-    # Access token
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
-
-    # Refresh token
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-
-    # Refresh token rotation
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
 }
-
-
-# =============================================================================
-# REDIS / CACHE
-# =============================================================================
 
 CACHES = {
     "default": {
@@ -225,13 +158,6 @@ CACHES = {
 }
 
 
-# =============================================================================
-# CORS
-# =============================================================================
-
-# In development (DEBUG=True) every origin is allowed for convenience.
-# With DEBUG off, only the explicit allow-list below is honored — so the
-# browser client on :5500 keeps working even when DEBUG is disabled.
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 
 CORS_ALLOWED_ORIGINS = [
@@ -244,10 +170,6 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 
-# =============================================================================
-# INTERNATIONALIZATION
-# =============================================================================
-
 LANGUAGE_CODE = "en-us"
 
 TIME_ZONE = "UTC"
@@ -255,10 +177,6 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-
-# =============================================================================
-# STATIC / MEDIA FILES
-# =============================================================================
 
 STATIC_URL = "static/"
 

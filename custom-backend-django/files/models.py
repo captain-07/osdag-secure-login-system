@@ -3,9 +3,6 @@ from django.db import models
 
 
 class File(models.Model):
-    # settings.AUTH_USER_MODEL (not a direct User import) is the correct way
-    # to reference the user model in a model definition — avoids circular
-    # import issues between apps.
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="files")
     filename = models.CharField(max_length=255)
     file = models.FileField(upload_to="user_files/")

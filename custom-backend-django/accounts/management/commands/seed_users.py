@@ -5,8 +5,6 @@ from files.models import File
 
 User = get_user_model()
 
-# Same emails/password as their seed-data.json and the quick-fill buttons
-# in index.html — so those buttons work against your real backend unmodified.
 SEED_USERS = [
     {"email": "alice@example.com", "password": "Password123!",
      "files": ["resume_alice.pdf", "profile_photo.jpg"]},
@@ -24,7 +22,6 @@ class Command(BaseCommand):
         for u in SEED_USERS:
             user, created = User.objects.get_or_create(email=u["email"])
             if created:
-                # set_password hashes it — never assign to user.password directly.
                 user.set_password(u["password"])
                 user.save()
                 self.stdout.write(self.style.SUCCESS(f"Created {user.email}"))

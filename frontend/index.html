@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>Auth Test Client</title>
 <style>
-  /* Intentionally minimal — this file exists so you can test the API, not judge the UI */
   body { font-family: monospace; max-width: 700px; margin: 30px auto; padding: 0 15px; }
   fieldset { margin-bottom: 20px; }
   label { display: block; margin-top: 8px; }
@@ -85,7 +84,6 @@
 <pre id="output">(responses will show up here)</pre>
 
 <script src="mock-api.js"></script>
-<!-- Appwrite Web SDK & adapter -->
 
 <script src="https://cdn.jsdelivr.net/npm/appwrite@20.0.0/dist/iife/sdk.js"></script>
 <script src="appwrite-adapter.js"></script>
@@ -138,8 +136,6 @@ async function doLogin() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
   });
-  // If the backend returns JWTs in the body, auto-fill the token fields.
-  // The refresh token is kept so logout can revoke it server-side.
   if (result.body && result.body.token) {
     document.getElementById('token').value = result.body.token;
   }
@@ -150,8 +146,6 @@ async function doLogin() {
 }
 
 async function doLogout() {
-  // Send the refresh token so the backend can blacklist it, not just the
-  // access token (which would otherwise leave a live refresh token behind).
   const result = await request('/logout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

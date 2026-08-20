@@ -15,9 +15,6 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
-# Make config.settings importable even when custom-backend-django/.env is
-# absent (e.g. on a fresh clone that only has .env.example). These defaults
-# are overridden below anyway — they only exist so the settings module loads.
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 os.environ.setdefault("DB_NAME", "osdag_test")
 os.environ.setdefault("DB_USER", "postgres")
@@ -31,9 +28,6 @@ def pytest_configure(config):
     """Point the test run at SQLite + locmem cache before Django sets up."""
     from django.conf import settings
 
-    # Update the existing dicts in place — Django's ConnectionHandler captured
-    # a reference to them at import time, so replacing the dict objects would
-    # drop the defaults it already injected (ATOMIC_REQUESTS, TIMEOUT, ...).
     settings.DATABASES["default"].update(
         {
             "ENGINE": "django.db.backends.sqlite3",
@@ -48,8 +42,6 @@ def pytest_configure(config):
     )
     settings.MEDIA_ROOT = tempfile.mkdtemp(prefix="osdag-test-media-")
 
-    # Give non-throttle tests headroom so lockout/me/login logic isn't
-    # fighting the rate limiter. The throttle test overrides this itself.
     settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
         "login": "100/min",
         "register": "100/min",

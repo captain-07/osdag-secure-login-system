@@ -27,13 +27,10 @@
  */
 
 (function () {
-  const SESSION_TTL_MS = 30 * 60 * 1000; // 30 min
+  const SESSION_TTL_MS = 30 * 60 * 1000;
   const MAX_FAILED_ATTEMPTS = 5;
-  const LOCKOUT_MS = 60 * 1000; // 60 sec
+  const LOCKOUT_MS = 60 * 1000;
 
-  // Fallback copy of seed-data.json, used only if the fetch below fails
-  // (e.g. you double-clicked index.html instead of serving it, and the
-  // browser's file:// CORS rules blocked loading the JSON file).
   const FALLBACK_SEED = {
     users: [
       {
@@ -63,7 +60,6 @@
     ]
   };
 
-  // ---- tiny non-cryptographic hash, demo purposes ONLY ----
   function fakeHash(password) {
     let h = 0;
     for (let i = 0; i < password.length; i++) {
@@ -72,13 +68,12 @@
     return "demo_hash_" + h.toString(16);
   }
 
-  // ---- in-memory state ----
   const state = {
-    usersByEmail: new Map(),   // email -> user record (with hashed password)
-    filesByOwner: new Map(),   // ownerId -> [files]
-    filesById: new Map(),      // fileId -> file
-    sessions: new Map(),       // token -> { userId, expiresAt }
-    failedAttempts: new Map(), // email -> { count, lockedUntil }
+    usersByEmail: new Map(),
+    filesByOwner: new Map(),
+    filesById: new Map(),
+    sessions: new Map(),
+    failedAttempts: new Map(),
   };
 
   function loadSeed(seed) {
@@ -108,7 +103,6 @@
   }
   const ready = init();
 
-  // ---- helpers ----
   function json(status, body) {
     return new Response(JSON.stringify(body), {
       status,
@@ -143,7 +137,6 @@
     return null;
   }
 
-  // ---- route handlers ----
   async function handleRegister(req) {
     const { email, password } = await req.json();
     if (!email || !password) return json(400, { error: "email and password are required" });
@@ -181,7 +174,7 @@
         entry.count = 0;
       }
       state.failedAttempts.set(email, entry);
-      return json(401, GENERIC_ERROR); // never reveal whether the email exists
+      return json(401, GENERIC_ERROR);
     }
 
     state.failedAttempts.delete(email);
@@ -192,7 +185,7 @@
 
   async function handleLogout(req) {
     const token = getBearer(req);
-    if (token) state.sessions.delete(token); // server-side invalidation, not just a client-side clear
+    if (token) state.sessions.delete(token);
     return json(200, { message: "Logged out" });
   }
 
@@ -216,7 +209,7 @@
     if (!userId) return json(401, { error: "Not authenticated" });
     const file = state.filesById.get(fileId);
     if (!file) return json(404, { error: "File not found" });
-    if (file.ownerId !== userId) return json(403, { error: "You do not have access to this file" }); // distinct from 404
+    if (file.ownerId !== userId) return json(403, { error: "You do not have access to this file" });
     return json(200, { file });
   }
 
@@ -230,7 +223,6 @@
     return new Response(fakeContent, { status: 200, headers: { "Content-Type": "text/plain" } });
   }
 
-  // ---- patch window.fetch, but only when mock mode is enabled ----
   const realFetch = window.fetch.bind(window);
 
   window.fetch = async function (input, init) {
@@ -239,12 +231,11 @@
 
     if (!mockEnabled) return realFetch(input, init);
 
-    await ready; // make sure seed data is loaded
+    await ready;
     const url = typeof input === "string" ? input : input.url;
     const { pathname } = new URL(url, window.location.href);
     const req = new Request(url, init);
 
-    // simulate a little network latency so it feels real
     await new Promise((r) => setTimeout(r, 150));
 
     if (pathname === "/register" && req.method === "POST") return handleRegister(req);

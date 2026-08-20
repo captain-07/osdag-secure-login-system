@@ -92,7 +92,6 @@ def test_account_locks_after_five_failed_attempts(api_client, user):
     assert user.failed_login_attempts == 5
     assert user.is_locked()
 
-    # Even the correct password is rejected while locked.
     resp = api_client.post(
         LOGIN_URL,
         {"email": "alice@example.com", "password": "Password123!"},
@@ -102,7 +101,6 @@ def test_account_locks_after_five_failed_attempts(api_client, user):
 
 
 def test_lockout_budget_resets_after_window_expires(api_client, user):
-    # Simulate a previously locked account whose lockout has already elapsed.
     user.failed_login_attempts = 5
     user.locked_until = timezone.now() - timedelta(seconds=1)
     user.save(update_fields=["failed_login_attempts", "locked_until"])
@@ -114,8 +112,6 @@ def test_lockout_budget_resets_after_window_expires(api_client, user):
     )
     assert resp.status_code == status.HTTP_401_UNAUTHORIZED
 
-    # One failed attempt after the window should NOT immediately re-lock the
-    # account from the stale count — the budget starts fresh.
     user.refresh_from_db()
     assert user.failed_login_attempts == 1
     assert user.locked_until is None

@@ -39,11 +39,9 @@ def test_logout_revokes_access_token(db, user):
     client = APIClient()
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
 
-    # Sanity check: the token works before logout.
     assert client.get(ME_URL).status_code == status.HTTP_200_OK
 
     resp = client.post(LOGOUT_URL, {"refresh": str(refresh)}, format="json")
     assert resp.status_code == status.HTTP_205_RESET_CONTENT
 
-    # The same access token is now blocklisted and must be rejected.
     assert client.get(ME_URL).status_code == status.HTTP_401_UNAUTHORIZED

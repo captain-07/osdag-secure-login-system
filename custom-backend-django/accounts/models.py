@@ -1,4 +1,3 @@
-# Create your models here.
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -32,24 +31,18 @@ class UserManager(BaseUserManager):
 
 class User(AbstractUser):
     email = models.EmailField(unique=True)
-    username = None  # we don't use username at all — email is the sole identifier
+    username = None
 
     objects = UserManager()
 
-    # These two fields power account lockout (Step 4 of the next batch).
-    # failed_login_attempts resets to 0 on any successful login.
-    # locked_until is null unless the account is currently locked.
     failed_login_attempts = models.PositiveIntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
 
-    USERNAME_FIELD = "email"   # tells Django auth machinery to treat email as the login field
-    REQUIRED_FIELDS = []       # createsuperuser only asks for email + password, nothing else
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = []
 
     def is_locked(self) -> bool:
-        # Centralizing this check here (rather than repeating the comparison in every view)
-        # means the lockout logic only lives in one place.
         return bool(self.locked_until and self.locked_until > timezone.now())
 
-    # This will show email instead of object name
     def __str__(self):
         return self.email

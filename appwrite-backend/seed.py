@@ -27,14 +27,10 @@ users = Users(client)
 tablesdb = TablesDB(client)
 storage = Storage(client)
 
-# Appwrite list endpoints are paginated (default page size 25). Loop over every
-# page so re-runs of this script with more than 25 existing users/rows still
-# detect them instead of hitting unique-constraint errors / duplicate uploads.
 PAGE_SIZE = 25
 
 
 def _all_users():
-    # The SDK types `.total` as float (3.0), but range() needs ints.
     total = int(users.list(queries=[Query.limit(PAGE_SIZE)], total=True).total)
     for offset in range(0, total, PAGE_SIZE):
         page = users.list(
@@ -74,14 +70,10 @@ for r in _all_rows():
     existing_rows.add((r.data["ownerId"], r.data["filename"]))
 
 for u in SEED_USERS:
-    # Re-runs are safe: if the email already exists, reuse the user instead
-    # of erroring on the unique-email constraint.
     if u["email"] in existing:
         user_id = existing[u["email"]]
         print(f"User {u['email']} already exists ({user_id}), reusing")
     else:
-        # Users API creates the user directly (hashing handled internally by
-        # Appwrite) — no client-side signup flow needed for seeding.
         user = users.create(user_id=ID.unique(), email=u["email"], password=u["password"], name=u["name"])
         user_id = user.id
         print(f"Created user {u['email']} ({user_id})")
@@ -90,20 +82,14 @@ for u in SEED_USERS:
         if (user_id, fname) in existing_rows:
             print(f"  Skip {fname} for {u['email']} (already seeded)")
             continue
-        # Upload the actual bytes to storage first...
         dummy_bytes = f"Dummy content for {fname}".encode()
         uploaded = storage.create_file(
             bucket_id=BUCKET_ID,
             file_id=ID.unique(),
             file=InputFile.from_bytes(dummy_bytes, filename=fname),
-            # Scoping read permission to this exact user is what makes
-            # isolation enforcement Appwrite's job, not our code's job.
             permissions=[Permission.read(Role.user(user_id))],
         )
 
-        # ...then create the metadata row pointing at it, same per-user
-        # permission pattern. This database is TablesDB type, so we use
-        # create_row (tables/rows), NOT the deprecated create_document.
         tablesdb.create_row(
             database_id=DATABASE_ID,
             table_id=FILES_COLLECTION_ID,
