@@ -7,10 +7,15 @@ Two independent implementations of a login/registration/logout system with per-u
 
 Both implementations expose the same functional surface (register, login, logout, `/me`, `/files`, `/files/:id`) and are tested against the single provided `frontend/index.html` client, used unmodified as required by the task.
 
+## Demo Video
+
+Watch the full walkthrough: [Secure Login System — Demo](https://youtu.be/zEI10ti5QUo)
+
 ---
 
 ## Table of Contents
 
+- [Demo Video](#demo-video)
 - [Repository Structure](#repository-structure)
 - [Quick Start](#quick-start)
 - [Setup — Django Backend](#setup--django-backend)
